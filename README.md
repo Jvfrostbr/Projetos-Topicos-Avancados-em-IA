@@ -1,1 +1,1 @@
-# Projetos---T-picos-Avan-ados-em-IA
+Repositório destinado para armazenar os projetos da disciplina de tópicos avançados em IA 

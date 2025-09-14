@@ -6,11 +6,15 @@ import kaggle
 dataset_name = 'johnsmith88/heart-disease-dataset'
 file_name = 'heart.csv'
 
-# Baixar o dataset
-kaggle.api.dataset_download_files(dataset_name, path='.', unzip=True)
+# Baixando o dataset (descomentar para baixar o dataset, caso não tenha o arquivo heart.csv)
+#kaggle.api.dataset_download_files(dataset_name, path='.', unzip=True)
 
-# Carregar o dataset para um DataFrame do Pandas
-df = pd.read_csv(file_name)
+# Lista com os nomes das colunas
+colunas = [
+    'age', 'sex', 'cp', 'trestbps', 'chol', 'fbs', 'restecg', 
+    'thalach', 'exang', 'oldpeak', 'slope', 'ca', 'thal', 'target'
+]
 
-# Visualizar as primeiras linhas
-print(df.head())
+# Carregando e Visualizando as primeiras linhas do dataset
+df = pd.read_csv(file_name, names=colunas, skiprows=1)
+df.head()

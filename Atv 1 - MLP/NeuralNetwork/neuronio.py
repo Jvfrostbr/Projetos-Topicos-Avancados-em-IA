@@ -16,6 +16,6 @@ class Neuronio:
     def __init__(self, vies):
         self.id = str(uuid.uuid4())
         self.entrada = 0.0
-        self.vies = vies
+        self.vies = vies if isinstance(vies, (int, float)) else numpy.random.uniform(-1, 1)
         self.saida = 0.0
         self.delta = 0.0

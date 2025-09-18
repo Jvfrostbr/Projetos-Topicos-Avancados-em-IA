@@ -1,7 +1,6 @@
 import uuid
 import numpy as np
 from .camada import Camada
-from .neuronio import Neuronio
 from .conexao import Conexao
 
 class RedeNeural:
@@ -20,14 +19,21 @@ class RedeNeural:
     def adicionar_camada(self, num_neuronios):
         camada = Camada()
         for _ in range(num_neuronios):
-            vies = np.random.uniform(-2, 2)  # inicialização aleatória
+            # Inicialização Xavier para vieses (mais conservadora)
+            vies = np.random.uniform(-0.1, 0.1)
             camada.adicionar_neuronio(vies)
         self.camadas.append(camada)
 
     def conectar_camadas(self, camada_origem, camada_destino):
+        # Xavier initialization para pesos
+        fan_in = len(camada_origem.get_neuronios())
+        fan_out = len(camada_destino.get_neuronios())
+        limit = np.sqrt(6.0 / (fan_in + fan_out))
+        
         for neuronio_origem in camada_origem.get_neuronios():
             for neuronio_destino in camada_destino.get_neuronios():
-                conexao = Conexao(neuronio_origem=neuronio_origem, neuronio_destino=neuronio_destino)
+                peso = np.random.uniform(-limit, limit)
+                conexao = Conexao(peso=peso, neuronio_origem=neuronio_origem, neuronio_destino=neuronio_destino)
                 self.conexoes.append(conexao)
 
     def ativacao(self, x):
@@ -76,8 +82,8 @@ class RedeNeural:
 
         # Erro na camada de saída
         for i, neuronio in enumerate(self.camadas[-1].get_neuronios()):
-            erro = saidas_esperadas[i] - saidas_obtidas[i]
-            neuronio.delta = erro * self.derivada_ativacao(neuronio.saida)
+            erro = saidas_obtidas[i] - saidas_esperadas[i]
+            neuronio.delta = erro * self.derivada_ativacao(neuronio.saida, neuronio.entrada)
 
         # Erro nas camadas ocultas
         for i in reversed(range(1, len(self.camadas) - 1)):
@@ -87,17 +93,21 @@ class RedeNeural:
                     for conexao in self.conexoes
                     if conexao.neuronio_origem == neuronio
                 )
-                neuronio.delta = erro * self.derivada_ativacao(neuronio.saida)
+                neuronio.delta = erro * self.derivada_ativacao(neuronio.saida, neuronio.entrada)
 
         # Atualização dos pesos (descida do gradiente: -=)
         for conexao in self.conexoes:
             gradiente = conexao.neuronio_destino.delta * conexao.neuronio_origem.saida
+            # Gradient clipping para evitar exploding gradients
+            gradiente = np.clip(gradiente, -5.0, 5.0)
             conexao.peso -= taxa_aprendizado * gradiente
 
         # Atualização dos vieses (descida do gradiente: -=)
         for camada in self.camadas[1:]:
             for neuronio in camada.get_neuronios():
-                neuronio.vies -= taxa_aprendizado * neuronio.delta
+                # Gradient clipping para vieses também
+                delta_clipped = np.clip(neuronio.delta, -5.0, 5.0)
+                neuronio.vies -= taxa_aprendizado * delta_clipped
 
     def get_estrutura_info(self):
         """Retorna informações sobre a estrutura da rede"""
@@ -164,12 +174,20 @@ class RedeNeural:
 
     def reset_treinamento(self):
         """Reseta os pesos e vieses da rede para valores aleatórios"""
-        for conexao in self.conexoes:
-            conexao.peso = np.random.uniform(-1, 1)
+        # Resetar pesos com Xavier initialization
+        for i in range(1, len(self.camadas)):
+            fan_in = len(self.camadas[i-1].get_neuronios())
+            fan_out = len(self.camadas[i].get_neuronios())
+            limit = np.sqrt(6.0 / (fan_in + fan_out))
+            
+            for conexao in self.conexoes:
+                if conexao.neuronio_destino in self.camadas[i].get_neuronios():
+                    conexao.peso = np.random.uniform(-limit, limit)
         
+        # Resetar vieses
         for camada in self.camadas[1:]:
             for neuronio in camada.get_neuronios():
-                neuronio.vies = np.random.uniform(-1, 1)
+                neuronio.vies = np.random.uniform(-0.1, 0.1)
                 neuronio.delta = 0.0
                 neuronio.entrada = 0.0
                 neuronio.saida = 0.0

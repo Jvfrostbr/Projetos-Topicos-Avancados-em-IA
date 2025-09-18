@@ -15,8 +15,6 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 from NeuralNetwork.rede import RedeNeural
 from NeuralNetwork.camada import Camada
-from NeuralNetwork.neuronio import Neuronio
-from NeuralNetwork.conexao import Conexao
 
 class ColumnSelector(QDialog):
     def __init__(self, columns, parent=None):
@@ -53,10 +51,16 @@ class NeuralGUI(QMainWindow):
 
         self.rede = RedeNeural()
         self.dataset = None
+        self.dataset_train = None
+        self.dataset_test = None
+        self.dataset_train_normalizado = None
+        self.dataset_test_normalizado = None
         self.entrada_cols = []
         self.saida_cols = []
         self.erros = []
         self.epoch = 0
+        self.entrada_treino_stats = {}  # Para normalização baseada no treino
+        self.saida_treino_stats = {}    # Para normalização baseada no treino
 
         # Layouts principais
         main_widget = QWidget()
@@ -119,9 +123,9 @@ class NeuralGUI(QMainWindow):
         lr_layout = QHBoxLayout()
         lr_layout.addWidget(QLabel("Taxa de aprendizado:"))
         self.lr_spin = QDoubleSpinBox()
-        self.lr_spin.setDecimals(3)
-        self.lr_spin.setRange(0.0001, 10.0)
-        self.lr_spin.setValue(0.1)
+        self.lr_spin.setDecimals(4)
+        self.lr_spin.setRange(0.0001, 1.0)
+        self.lr_spin.setValue(0.01)
         lr_layout.addWidget(self.lr_spin)
         control_panel.addLayout(lr_layout)
 
@@ -184,7 +188,60 @@ class NeuralGUI(QMainWindow):
                 return
             self.entrada_cols = entradas
             self.saida_cols = saidas
+            self.split_data()
+            self.normalize_data()
             self.setup_input_output_layers()
+    
+    def split_data(self, test_size=0.3, random_state=42):
+        """Divide o dataset em treino e teste"""
+        if self.dataset is None:
+            QMessageBox.warning(self, "Erro", "Carregue um CSV primeiro!")
+            return
+
+        # Embaralha o dataset
+        df_shuffled = self.dataset.sample(frac=1, random_state=random_state).reset_index(drop=True)
+        
+        # Define o tamanho do conjunto de treino
+        total_size = len(df_shuffled)
+        test_size_int = int(test_size * total_size)
+        train_size_int = total_size - test_size_int
+
+        # Divide os DataFrames
+        self.dataset_train = df_shuffled.iloc[:train_size_int]
+        self.dataset_test = df_shuffled.iloc[train_size_int:]
+
+        self.status_label.setText(f"Dados divididos: {len(self.dataset_train)} para treino, {len(self.dataset_test)} para teste.")
+        QMessageBox.information(self, "Divisão Concluída", f"Conjunto de treino: {len(self.dataset_train)} registros\nConjunto de teste: {len(self.dataset_test)} registros")
+    
+    def normalize_data(self):
+        """Normaliza os dados de entrada e saída usando z-score"""
+        if self.dataset_train is None or not self.entrada_cols or not self.saida_cols:
+            return
+        
+        # Criar cópia dos datasets para normalização
+        self.dataset_train_normalizado = self.dataset_train.copy()
+        self.dataset_test_normalizado = self.dataset_test.copy()
+        
+        # Normalizar entradas e saídas usando as estatísticas do CONJUNTO DE TREINO
+        for col in self.entrada_cols:
+            mean = self.dataset_train[col].mean()
+            std = self.dataset_train[col].std()
+            if std > 0:
+                self.dataset_train_normalizado[col] = (self.dataset_train[col] - mean) / std
+                self.dataset_test_normalizado[col] = (self.dataset_test[col] - mean) / std
+                self.entrada_treino_stats[col] = {'mean': mean, 'std': std}
+            else:
+                self.entrada_treino_stats[col] = {'mean': mean, 'std': 1.0}
+        
+        for col in self.saida_cols:
+            mean = self.dataset_train[col].mean()
+            std = self.dataset_train[col].std()
+            if std > 0:
+                self.dataset_train_normalizado[col] = (self.dataset_train[col] - mean) / std
+                self.dataset_test_normalizado[col] = (self.dataset_test[col] - mean) / std
+                self.saida_treino_stats[col] = {'mean': mean, 'std': std}
+            else:
+                self.saida_treino_stats[col] = {'mean': mean, 'std': 1.0}
 
     # --- Camadas ---
     def setup_input_output_layers(self):
@@ -269,9 +326,9 @@ class NeuralGUI(QMainWindow):
             QMessageBox.warning(self, "Erro", "Carregue CSV e selecione entradas/saídas")
             return
         self.rede.func_ativacao = self.activation_combo.currentText()
-        entradas = self.dataset[self.entrada_cols].iloc[0].values.tolist()
+        entradas = self.dataset_train_normalizado[self.entrada_cols].iloc[0].values.tolist()
         saida = self.rede.feedforward(entradas)
-        QMessageBox.information(self, "Feedforward", f"Entrada: {entradas}\nSaída: {[round(s, 4) for s in saida]}")
+        QMessageBox.information(self, "Feedforward", f"Entrada normalizada: {[round(x, 4) for x in entradas]}\nSaída: {[round(s, 4) for s in saida]}")
         self.draw_graph()
         self.update_analysis()
 
@@ -280,20 +337,21 @@ class NeuralGUI(QMainWindow):
         if self.dataset is None or not self.entrada_cols or not self.saida_cols:
             QMessageBox.warning(self, "Erro", "Carregue CSV e selecione entradas/saídas")
             return
+            
         self.rede.func_ativacao = self.activation_combo.currentText()
-        taxa = self.lr_spin.value()
+        taxa_aprendizado = self.lr_spin.value()
         for epoch in range(n):
             erro_total = 0
-            for idx, row in self.dataset.iterrows():
+            for idx, row in self.dataset_train_normalizado.iterrows():
                 entradas = row[self.entrada_cols].values.tolist()
                 saidas_esperadas = row[self.saida_cols].values.tolist()
-                self.rede.backpropagation(entradas, saidas_esperadas, taxa)
+                self.rede.backpropagation(entradas, saidas_esperadas, taxa_aprendizado)
                 saidas_obtidas = self.rede.feedforward(entradas)
                 erro_total += np.mean((np.array(saidas_esperadas) - np.array(saidas_obtidas))**2)
-            erro_medio = erro_total / len(self.dataset)
+            erro_medio = erro_total / len(self.dataset_train_normalizado)
             self.erros.append(erro_medio)
         self.epoch += n
-        self.status_label.setText(f"Treinamento concluído. Total: {self.epoch} épocas")
+        QMessageBox.information(self, "Treinamento", f"Treinamento concluído. Total: {self.epoch} épocas")
         self.draw_graph()
         self.update_analysis()
         self.draw_error_graph()
@@ -308,18 +366,18 @@ class NeuralGUI(QMainWindow):
         tol = 1e-4
         for epoch in range(max_epochs):
             erro_total = 0
-            for idx, row in self.dataset.iterrows():
+            for idx, row in self.dataset_train_normalizado.iterrows():
                 entradas = row[self.entrada_cols].values.tolist()
                 saidas_esperadas = row[self.saida_cols].values.tolist()
                 self.rede.backpropagation(entradas, saidas_esperadas, taxa)
                 saidas_obtidas = self.rede.feedforward(entradas)
                 erro_total += np.mean((np.array(saidas_esperadas) - np.array(saidas_obtidas))**2)
-            erro_medio = erro_total / len(self.dataset)
+            erro_medio = erro_total / len(self.dataset_train_normalizado)
             self.erros.append(erro_medio)
             if len(self.erros) > 2 and abs(self.erros[-1] - self.erros[-2]) < tol:
                 break
         self.epoch += epoch + 1
-        self.status_label.setText(f"Treinamento concluído. Total: {self.epoch} épocas")
+        QMessageBox.information(self, "Treinamento", f"Treinamento concluído. Total: {self.epoch} épocas")
         self.draw_graph()
         self.update_analysis()
         self.draw_error_graph()
@@ -329,6 +387,9 @@ class NeuralGUI(QMainWindow):
         self.rede.reset_treinamento()
         self.erros = []
         self.epoch = 0
+        # Re-normalizar dados se necessário
+        if self.dataset is not None and self.entrada_cols and self.saida_cols:
+            self.normalize_data()
         self.draw_error_graph()
         self.update_analysis()
         self.status_label.setText("Rede resetada")
@@ -368,7 +429,13 @@ class NeuralGUI(QMainWindow):
         text = f"Épocas treinadas: {self.epoch}\n"
         if self.erros:
             text += f"Erro última época: {self.erros[-1]:.6f}\n"
-        text += f"Função de ativação: {self.rede.func_ativacao}\n\nEstrutura da Rede:\n"
+        text += f"Função de ativação: {self.rede.func_ativacao}\n"
+        text += f"Taxa de aprendizado: {self.lr_spin.value()}\n"
+        if self.entrada_treino_stats:
+            text += f"Dados normalizados: Sim\n"
+        else:
+            text += f"Dados normalizados: Não\n"
+        text += f"\nEstrutura da Rede:\n"
         
         # Usa os métodos da rede neural para obter informações
         estrutura_info = self.rede.get_estrutura_info()

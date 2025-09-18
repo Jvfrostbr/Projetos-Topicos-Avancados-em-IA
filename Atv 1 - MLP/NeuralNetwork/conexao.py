@@ -13,6 +13,14 @@ import numpy
 class Conexao:
     def __init__(self, peso=None, neuronio_origem=None, neuronio_destino=None):
         self.id = str(uuid.uuid4())
-        self.peso = peso if peso is not None else numpy.random.uniform(-1, 1)
+        # Inicialização Xavier para pesos
+        if peso is not None:
+            self.peso = peso
+        else:
+            # Xavier initialization: sqrt(6/(fan_in + fan_out))
+            fan_in = 1  # será ajustado na rede
+            fan_out = 1  # será ajustado na rede
+            limit = numpy.sqrt(6.0 / (fan_in + fan_out))
+            self.peso = numpy.random.uniform(-limit, limit)
         self.neuronio_origem = neuronio_origem
         self.neuronio_destino = neuronio_destino

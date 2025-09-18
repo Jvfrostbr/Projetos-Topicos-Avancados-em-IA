@@ -120,6 +120,18 @@ class NeuralGUI(QMainWindow):
 
         # --- Treinamento ---
         control_panel.addWidget(QLabel("Treinamento:"))
+
+        # SpinBox para quantidade de épocas
+        epochs_layout = QHBoxLayout()
+        epochs_layout.addWidget(QLabel("Épocas:"))
+        self.epochs_spin = QSpinBox()
+        self.epochs_spin.setMinimum(1)
+        self.epochs_spin.setMaximum(10000)
+        self.epochs_spin.setValue(1)
+        epochs_layout.addWidget(self.epochs_spin)
+        control_panel.addLayout(epochs_layout)
+
+        # Taxa de aprendizado
         lr_layout = QHBoxLayout()
         lr_layout.addWidget(QLabel("Taxa de aprendizado:"))
         self.lr_spin = QDoubleSpinBox()
@@ -129,21 +141,25 @@ class NeuralGUI(QMainWindow):
         lr_layout.addWidget(self.lr_spin)
         control_panel.addLayout(lr_layout)
 
-        btn_train1 = QPushButton("Treinar 1 época")
-        btn_train1.clicked.connect(lambda: self.train_epochs(1))
-        control_panel.addWidget(btn_train1)
+        # Botão Treinar
+        btn_train_custom = QPushButton("Treinar")
+        btn_train_custom.clicked.connect(lambda: self.train_epochs(self.epochs_spin.value()))
+        control_panel.addWidget(btn_train_custom)
 
-        btn_train10 = QPushButton("Treinar 10 épocas")
-        btn_train10.clicked.connect(lambda: self.train_epochs(10))
-        control_panel.addWidget(btn_train10)
-
+        # Botão Treinar até convergência
         btn_train_conv = QPushButton("Treinar até convergência")
         btn_train_conv.clicked.connect(self.train_until_converge)
         control_panel.addWidget(btn_train_conv)
 
+        # Botão Resetar
         btn_reset = QPushButton("Resetar Rede")
         btn_reset.clicked.connect(self.reset_rede)
         control_panel.addWidget(btn_reset)
+
+        # Botão Avaliar
+        btn_eval = QPushButton("Avaliar Rede (Teste)")
+        btn_eval.clicked.connect(self.avaliar_rede)
+        control_panel.addWidget(btn_eval)
 
         # --- Gráficos ---
         self.fig, self.ax = plt.subplots(figsize=(5, 5))
@@ -464,6 +480,35 @@ class NeuralGUI(QMainWindow):
             text += f"  Camada {vies['camada']} Neurônio {vies['neuronio']}: {vies['vies']:.4f}\n"
         
         self.analysis_text.setPlainText(text)
+    
+    # --- Avaliação ---
+    def avaliar_rede(self):
+        if self.dataset_test_normalizado is None or not self.entrada_cols or not self.saida_cols:
+            QMessageBox.warning(self, "Erro", "Conjunto de teste não disponível ou colunas não definidas")
+            return
+
+        erro_total = 0
+        acertos = 0
+        total = len(self.dataset_test_normalizado)
+
+        for idx, row in self.dataset_test_normalizado.iterrows():
+            entradas = row[self.entrada_cols].values.tolist()
+            saidas_esperadas = row[self.saida_cols].values.tolist()
+            saidas_obtidas = self.rede.feedforward(entradas)
+
+            # Para regressão: erro médio quadrático
+            erro_total += np.mean((np.array(saidas_esperadas) - np.array(saidas_obtidas))**2)
+
+            # Para classificação binária: contar acertos
+            pred = [1 if s >= 0.5 else 0 for s in saidas_obtidas]
+            esperado = [1 if s >= 0.5 else 0 for s in saidas_esperadas]
+            if pred == esperado:
+                acertos += 1
+
+        erro_medio = erro_total / total
+        acuracia = acertos / total
+
+        QMessageBox.information(self, "Avaliação", f"Acurácia (teste): {acuracia*100:.2f}%\nErro médio: {erro_medio:.6f}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

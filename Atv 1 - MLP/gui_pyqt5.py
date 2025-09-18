@@ -151,16 +151,15 @@ class NeuralGUI(QMainWindow):
         btn_train_conv.clicked.connect(self.train_until_converge)
         control_panel.addWidget(btn_train_conv)
 
+        # Botão Avaliar acurácia da Rede Neural (Treino e Teste)
+        btn_eval = QPushButton("Avaliar acurácia da Rede Neural")
+        btn_eval.clicked.connect(self.avaliar_treino_teste)
+        control_panel.addWidget(btn_eval)
+
         # Botão Resetar
         btn_reset = QPushButton("Resetar Rede")
         btn_reset.clicked.connect(self.reset_rede)
         control_panel.addWidget(btn_reset)
-
-        # Botão Avaliar
-        btn_eval = QPushButton("Avaliar Rede (Teste)")
-        btn_eval.clicked.connect(self.avaliar_rede)
-        control_panel.addWidget(btn_eval)
-
         # --- Gráficos ---
         self.fig, self.ax = plt.subplots(figsize=(5, 5))
         self.canvas = FigureCanvas(self.fig)
@@ -366,11 +365,16 @@ class NeuralGUI(QMainWindow):
                 erro_total += np.mean((np.array(saidas_esperadas) - np.array(saidas_obtidas))**2)
             erro_medio = erro_total / len(self.dataset_train_normalizado)
             self.erros.append(erro_medio)
+
+            # Atualizando o grafo e os erros após cada época
+            self.draw_graph()
+            self.draw_error_graph()
+            self.update_analysis()
+            QApplication.processEvents()  # não travar interface
+
         self.epoch += n
         QMessageBox.information(self, "Treinamento", f"Treinamento concluído. Total: {self.epoch} épocas")
-        self.draw_graph()
-        self.update_analysis()
-        self.draw_error_graph()
+
 
     def train_until_converge(self):
         if self.dataset is None or not self.entrada_cols or not self.saida_cols:
@@ -379,7 +383,7 @@ class NeuralGUI(QMainWindow):
         self.rede.func_ativacao = self.activation_combo.currentText()
         taxa = self.lr_spin.value()
         max_epochs = 1000
-        tol = 1e-4
+        tol = 0.0001
         for epoch in range(max_epochs):
             erro_total = 0
             for idx, row in self.dataset_train_normalizado.iterrows():
@@ -482,33 +486,48 @@ class NeuralGUI(QMainWindow):
         self.analysis_text.setPlainText(text)
     
     # --- Avaliação ---
-    def avaliar_rede(self):
-        if self.dataset_test_normalizado is None or not self.entrada_cols or not self.saida_cols:
-            QMessageBox.warning(self, "Erro", "Conjunto de teste não disponível ou colunas não definidas")
+    def avaliar_treino_teste(self):
+        if self.dataset_train_normalizado is None or self.dataset_test_normalizado is None:
+            QMessageBox.warning(self, "Erro", "Dados de treino ou teste não disponíveis")
+            return
+
+        acuracia_treino, erro_treino = self.avaliar_dataset(self.dataset_train_normalizado, nome = "Treino")
+        acuracia_teste, erro_teste = self.avaliar_dataset(self.dataset_test_normalizado, nome = "Teste")
+
+        QMessageBox.information(
+            self,
+            "Avaliação Rede Neural",
+            f"Treino:   Acurácia = {acuracia_treino*100:.2f}% | Erro médio = {erro_treino:.6f}\n"
+            f"Teste:    Acurácia = {acuracia_teste*100:.2f}% | Erro médio = {erro_teste:.6f}"
+        )
+    
+    def avaliar_dataset(self, dataset, nome):
+        if dataset is None or not self.entrada_cols or not self.saida_cols:
+            QMessageBox.warning(self, "Erro", f"{nome} não disponível ou colunas não definidas")
             return
 
         erro_total = 0
         acertos = 0
-        total = len(self.dataset_test_normalizado)
+        total = len(dataset)
 
-        for idx, row in self.dataset_test_normalizado.iterrows():
+        for idx, row in dataset.iterrows():
             entradas = row[self.entrada_cols].values.tolist()
             saidas_esperadas = row[self.saida_cols].values.tolist()
             saidas_obtidas = self.rede.feedforward(entradas)
 
-            # Para regressão: erro médio quadrático
+            # --- Erro médio quadrático (MSE) ---
             erro_total += np.mean((np.array(saidas_esperadas) - np.array(saidas_obtidas))**2)
 
             # Para classificação binária: contar acertos
             pred = [1 if s >= 0.5 else 0 for s in saidas_obtidas]
             esperado = [1 if s >= 0.5 else 0 for s in saidas_esperadas]
+            
             if pred == esperado:
                 acertos += 1
 
         erro_medio = erro_total / total
         acuracia = acertos / total
-
-        QMessageBox.information(self, "Avaliação", f"Acurácia (teste): {acuracia*100:.2f}%\nErro médio: {erro_medio:.6f}")
+        return acuracia, erro_medio
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

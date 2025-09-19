@@ -218,7 +218,7 @@ class NeuralGUI(QMainWindow):
             self.entrada_cols = entradas
             self.saida_cols = saidas
             self.split_data()
-            self.normalize_data()
+            self.standardize_data()
             self.setup_input_output_layers()
     
     def split_data(self, test_size=0.3, random_state=42):
@@ -242,7 +242,7 @@ class NeuralGUI(QMainWindow):
         self.status_label.setText(f"Dados divididos: {len(self.dataset_train)} para treino, {len(self.dataset_test)} para teste.")
         QMessageBox.information(self, "Divisão Concluída", f"Conjunto de treino: {len(self.dataset_train)} registros\nConjunto de teste: {len(self.dataset_test)} registros")
     
-    def normalize_data(self):
+    def standardize_data(self):
         """Padroniza os dados de entrada e saída usando z-score"""
         if self.dataset_train is None or not self.entrada_cols or not self.saida_cols:
             return
@@ -423,7 +423,7 @@ class NeuralGUI(QMainWindow):
         self.epoch = 0
         # Re-normalizar dados se necessário
         if self.dataset is not None and self.entrada_cols and self.saida_cols:
-            self.normalize_data()
+            self.standardize_data()
         self.draw_error_graph()
         self.update_analysis()
         self.status_label.setText("Rede resetada")

@@ -26,17 +26,36 @@ class ColumnSelector(QDialog):
         layout = QGridLayout()
         layout.addWidget(QLabel("Entradas"), 0, 0)
         layout.addWidget(QLabel("Saídas"), 0, 1)
+
+        # Botões selecionar/desmarcar todos
+        btn_sel_all_in = QPushButton("Selecionar Todos")
+        btn_unsel_all_in = QPushButton("Desmarcar Todos")
+        btn_sel_all_out = QPushButton("Selecionar Todos")
+        btn_unsel_all_out = QPushButton("Desmarcar Todos")
+        layout.addWidget(btn_sel_all_in, 1, 0)
+        layout.addWidget(btn_unsel_all_in, 2, 0)
+        layout.addWidget(btn_sel_all_out, 1, 1)
+        layout.addWidget(btn_unsel_all_out, 2, 1)
+
+        # Checkboxes começam na linha 3
         for i, col in enumerate(columns):
             ent = QCheckBox(col)
             sai = QCheckBox(col)
-            layout.addWidget(ent, i+1, 0)
-            layout.addWidget(sai, i+1, 1)
+            layout.addWidget(ent, i+3, 0)
+            layout.addWidget(sai, i+3, 1)
             self.entrada_checks.append(ent)
             self.saida_checks.append(sai)
+
         btn = QPushButton("Confirmar")
         btn.clicked.connect(self.accept)
-        layout.addWidget(btn, len(columns)+1, 0, 1, 2)
+        layout.addWidget(btn, len(columns)+4, 0, 1, 2)
         self.setLayout(layout)
+
+        # Funções dos botões
+        btn_sel_all_in.clicked.connect(lambda: [cb.setChecked(True) for cb in self.entrada_checks])
+        btn_unsel_all_in.clicked.connect(lambda: [cb.setChecked(False) for cb in self.entrada_checks])
+        btn_sel_all_out.clicked.connect(lambda: [cb.setChecked(True) for cb in self.saida_checks])
+        btn_unsel_all_out.clicked.connect(lambda: [cb.setChecked(False) for cb in self.saida_checks])
 
     def get_selection(self):
         entradas = [cb.text() for cb in self.entrada_checks if cb.isChecked()]
@@ -146,11 +165,6 @@ class NeuralGUI(QMainWindow):
         btn_train_custom.clicked.connect(lambda: self.train_epochs(self.epochs_spin.value()))
         control_panel.addWidget(btn_train_custom)
 
-        # Botão Treinar até convergência
-        btn_train_conv = QPushButton("Treinar até convergência")
-        btn_train_conv.clicked.connect(self.train_until_converge)
-        control_panel.addWidget(btn_train_conv)
-
         # Botão Avaliar acurácia da Rede Neural (Treino e Teste)
         btn_eval = QPushButton("Avaliar acurácia da Rede Neural")
         btn_eval.clicked.connect(self.avaliar_treino_teste)
@@ -229,7 +243,7 @@ class NeuralGUI(QMainWindow):
         QMessageBox.information(self, "Divisão Concluída", f"Conjunto de treino: {len(self.dataset_train)} registros\nConjunto de teste: {len(self.dataset_test)} registros")
     
     def normalize_data(self):
-        """Normaliza os dados de entrada e saída usando z-score"""
+        """Padroniza os dados de entrada e saída usando z-score"""
         if self.dataset_train is None or not self.entrada_cols or not self.saida_cols:
             return
         
@@ -237,7 +251,7 @@ class NeuralGUI(QMainWindow):
         self.dataset_train_normalizado = self.dataset_train.copy()
         self.dataset_test_normalizado = self.dataset_test.copy()
         
-        # Normalizar entradas e saídas usando as estatísticas do CONJUNTO DE TREINO
+        # Padroniza entradas e saídas usando as estatísticas do CONJUNTO DE TREINO
         for col in self.entrada_cols:
             mean = self.dataset_train[col].mean()
             std = self.dataset_train[col].std()
@@ -421,17 +435,42 @@ class NeuralGUI(QMainWindow):
         G = nx.DiGraph()
         pos = {}
         labels = {}
+    
+        espaco_horizontal = 10.0  # aumente para mais espaço entre camadas
+        espaco_vertical = 10.0    # aumente para mais espaço entre neurônios
+    
+        max_neuronios = max(len(camada.get_neuronios()) for camada in self.rede.camadas) if self.rede.camadas else 1
+    
         for i, camada in enumerate(self.rede.camadas):
-            for j, neuronio in enumerate(camada.get_neuronios()):
+            neuronios = camada.get_neuronios()
+            n = len(neuronios)
+            y_offset = (max_neuronios - n) / 2.0
+            for j, neuronio in enumerate(neuronios):
                 G.add_node(neuronio.id)
-                pos[neuronio.id] = (i*3, -j)
-                labels[neuronio.id] = f"{round(neuronio.saida,2)}"
+                pos[neuronio.id] = (i * espaco_horizontal, -(j + y_offset) * espaco_vertical)
+                labels[neuronio.id] = f"{round(neuronio.saida, 2)}"
+    
         for conexao in self.rede.conexoes:
-            G.add_edge(conexao.neuronio_origem.id, conexao.neuronio_destino.id, weight=round(conexao.peso,2))
-        nx.draw(G, pos, ax=self.ax, with_labels=True, labels=labels, node_color='lightblue', node_size=1000, font_size=8)
+            G.add_edge(
+                conexao.neuronio_origem.id,
+                conexao.neuronio_destino.id,
+                weight=round(conexao.peso, 2)
+            )
+    
+        nx.draw(
+            G, pos, ax=self.ax,
+            with_labels=True, labels=labels,
+            node_color='#90caf9', node_size=500,
+            font_size=6, edgecolors='black', linewidths=2
+        )
+    
         edge_labels = nx.get_edge_attributes(G, 'weight')
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=7, ax=self.ax)
-        self.ax.set_title("Rede Neural")
+        nx.draw_networkx_edge_labels(
+            G, pos, edge_labels=edge_labels, font_size=8, ax=self.ax
+        )
+    
+        self.ax.set_title("Rede Neural", fontsize=16, fontweight="bold")
+        self.ax.axis('off')
         self.canvas.draw()
 
     def draw_error_graph(self):

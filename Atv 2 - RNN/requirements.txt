@@ -1,0 +1,9 @@
+# libs para importar com o pip install na venv ao rodar o notebook
+# Exemplo: pip install -r requirements.txt
+numpy
+pandas
+matplotlib
+scikit-learn
+tensorflow
+keras
+nltk

@@ -1,0 +1,7 @@
+# libs para importar com o pip install na venv ao rodar o projeto
+# Exemplo: pip install -r requirements.txt
+numpy
+pandas
+matplotlib
+scikit-learn
+pyQt5

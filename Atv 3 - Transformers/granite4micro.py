@@ -45,7 +45,7 @@ def run_granite_inference(user_prompt):
     print("\n2. Gerando a resposta...")
     output = model.generate(
         **input_tokens, 
-        max_new_tokens=1024, 
+        max_new_tokens=250, 
         do_sample=True, # Permite variar as respostas (essencial para experimentos qualitativos!)
         temperature=0.7 
     )
@@ -60,11 +60,19 @@ def run_granite_inference(user_prompt):
     return response.replace('<|end_of_text|>', '').strip()
 
 # --- Execução para Teste em Português ---
-prompt_teste = "Eu estou muito triste. Não sei o que fazer. Não consigo dormir à noite e não tenho vontade de comer nem de acordar no dia seguinte. O que você sugere que eu faça?"
-resultado = run_granite_inference(prompt_teste)
+if __name__ == "__main__":
+    try:
+        user_prompt = input("Digite seu texto (em Português) e pressione Enter: ").strip()
+    except EOFError:
+        user_prompt = ""
 
-print("\n--- RESULTADO DA INFERÊNCIA ---")
-print(f"Input: {prompt_teste}")
-print("---------------------------------")
-print(f"Output: {resultado}")
-print("---------------------------------\n")
+    if not user_prompt:
+        print("Nenhum input recebido. Encerrando.")
+    else:
+        resultado = run_granite_inference(user_prompt)
+
+        print("\n--- RESULTADO DA INFERÊNCIA ---")
+        print(f"Input: {user_prompt}")
+        print("---------------------------------")
+        print(f"Output: {resultado}")
+        print("---------------------------------\n")
